@@ -1,4 +1,4 @@
-
+<!--Existing words : Hello, Goodbye, Thank you, Hungry, I love you, Yes, No, Sorry -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -53,6 +53,16 @@
             margin-top: 12px;
             font-weight: 600;
         }
+
+        #labelContainer {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 10px;
+            background: #eef2ff;
+            color: #1f2937;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -62,10 +72,109 @@
         <button id="startButton">Start webcam</button>
         <video id="video" autoplay playsinline muted></video>
         <p id="status">Waiting for camera...</p>
+        <p id="protocolWarning" style="margin-top: 12px; color: #b91c1c; font-weight: 600;"></p>
+        <div id="labelContainer">Detected label will show here.</div>
+        <div style="margin-top:12px; display:flex; gap:8px; align-items:center; justify-content:center;">
+            <label style="font-weight:600;">Normalization:</label>
+            <select id="normalizationSelect" style="padding:6px 8px; border-radius:6px;">
+                <option value="isolated_hand_2d">Tight bbox (working: Yes, Hello, I love you)</option>
+                <option value="isolated_hand_2d_square">Square bbox ← try this first for failing gestures</option>
+                <option value="isolated_hand_2d_padded">Tight bbox + 20% padding</option>
+                <option value="palm_scale">Palm scale (wrist→middle MCP)</option>
+                <option value="raw_coords_only">Raw coords only (63 values, includes z)</option>
+            </select>
+        </div>
+        <div style="margin-top:16px; padding:12px; border-radius:10px; background:#f3f4f6; text-align:left;">
+            <p style="margin:0 0 8px 0; font-weight:600; font-size:0.9rem;">Feature Vector Inspector (for debugging):</p>
+            <div style="display:grid; gap:8px;">
+                <div style="font-size:0.85rem; max-height:100px; overflow-y:auto; background:white; padding:8px; border-radius:6px; font-family:monospace; word-break:break-all;">
+                    <span id="featureVectorDisplay" style="color:#6b7280;">No features yet. Start webcam to capture.</span>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <button id="captureExampleButton" style="margin:0; padding:8px; font-size:0.85rem;">Capture example</button>
+                    <button id="downloadFeaturesButton" style="margin:0; padding:8px; font-size:0.85rem;">Download all examples</button>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr; gap:8px; margin-top:8px;">
+                    <button id="analyzeExamplesButton" style="padding:8px; font-size:0.85rem;">Analyze saved examples</button>
+                </div>
+                <input id="examplesFileInput" type="file" accept="application/json" style="display:none" />
+            </div>
+            <div id="captureStatusBox" style="margin-top:8px; font-size:0.85rem; color:#059669;"></div>
+        </div>
+        <div id="errorBox" style="display: none; margin-top: 12px; padding: 12px; border-radius: 10px; background: #fee2e2; color: #991b1b; text-align: left;"></div>
+        <div id="localLoader" style="display: none; margin-top: 16px; text-align: left;">
+            <p style="margin: 0 0 8px; font-weight: 600;">Load model files manually:</p>
+            <div style="display: grid; gap: 8px;">
+                <label>
+                    Model JSON
+                    <input type="file" id="modelJson" accept="application/json" />
+                </label>
+                <label>
+                    Metadata JSON
+                    <input type="file" id="metadataJson" accept="application/json" />
+                </label>
+                <label>
+                    Weights BIN
+                    <input type="file" id="weightsBin" accept=".bin" />
+                </label>
+                <button id="loadFilesButton">Load local model files</button>
+            </div>
+        </div>
     </div>
 
-        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
-    <script src="script.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.13.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7/dist/handpose.js"></script>
+    <script src="script.js"></script>
+
+    <div style="margin: 15px 0;">
+    <label for="volume-control" style="font-weight: bold;">Volume: </label>
+    <input type="range" id="volume-control" min="0" max="1" step="0.1" value="1">
+</div>
+
+
+
+<button id="sidebar-toggle" onclick="toggleSidebar()" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000; background-color: #28a745;">
+    🗣️ Speak to Sign
+</button>
+
+<div id="sidebar" style="position: fixed; top: 0; right: -350px; width: 300px; height: 100%; background-color: #ffffff; box-shadow: -2px 0 5px rgba(0,0,0,0.2); transition: right 0.3s ease; z-index: 999; padding: 20px; display: flex; flex-direction: column; font-family: sans-serif;">
+    <h2 style="margin-top: 0;">Speech to Sign</h2>
+    <p style="font-size: 14px; color: #666;">Click "Listen" and speak. The app will display the corresponding sign.</p>
+    
+    <label for="speech-lang" style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">Language:</label>
+    <select id="speech-lang" style="padding: 5px; margin-bottom: 15px;">
+        <option value="en-US">English (US)</option>
+        <option value="es-ES">Spanish (Spain)</option>
+        <option value="fr-FR">French (France)</option>
+    </select>
+
+
+<!-- test-->
+    <label for="voice-select" style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">Voice:</label>
+    <select id="voice-select" style="padding: 5px; margin-bottom: 15px;">
+        <option value="">Loading voices...</option>
+    </select>
+<!-- test-->
+
+
+
+    <button id="listen-btn" onclick="toggleListening()" style="background-color: #007bff; color: white; padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-bottom: 15px;">
+        🎙️ Start Listening
+    </button>
+    
+    <div style="font-weight: bold; margin-bottom: 5px; font-size: 14px; color: #333;">You Said:</div>
+    <div id="speech-transcript" style="border: 1px solid #ccc; border-radius: 5px; padding: 10px; min-height: 40px; background: #f9f9f9; margin-bottom: 20px; font-style: italic; font-size: 15px; color: #555;">(Waiting for speech...)</div>
+    
+    <div style="font-weight: bold; margin-bottom: 5px; font-size: 14px; color: #333;">Sign Language:</div>
+    <div id="sign-card-container" style="flex-grow: 1; border: 2px dashed #bbb; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; background-color: #fafafa;">
+        <div id="sign-placeholder" style="color: #999; text-align: center;">Spoken signs will appear here</div>
+        <img id="sign-image" src="" alt="Sign Language Translation" style="max-width: 100%; max-height: 200px; display: none; border-radius: 8px;">
+        <div id="sign-word-label" style="margin-top: 10px; font-weight: bold; font-size: 18px; color: #2c3e50;"></div>
+    </div>
+</div>
+
+
+
+
 </body>
 </html>
